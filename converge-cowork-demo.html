@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Converge · 结果级反馈收敛层</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #F5F1EB; }
+  #root { min-height: 100vh; }
+  /* 系统字体回退，无需联网字体 */
+</style>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState } = React;
+
+
+// ─────────────────────────────────────────────────────────────
+//  CONVERGE — v3 · 套用 Claude Cowork 视觉语言
+//  暖白底 / 赤陶橙强调 / 衬线标题 / 左侧窄导航 + 主内容区
+//  信息架构沿用 v2：项目 → loop → 结果；结果级批注收敛循环；攻关出口
+// ─────────────────────────────────────────────────────────────
+
+const C = {
+  // Cowork 暖白体系
+  bg: "#F5F1EB",        // 暖奶油底
+  surface: "#FBF9F5",   // 卡片面
+  surface2: "#FFFFFF",
+  raised: "#FEFDFB",
+  ink: "#2B2722",       // 近黑暖墨
+  body: "#4A443C",
+  dim: "#8A8175",
+  faint: "#B5AC9E",
+  line: "#E6DFD4",      // 柔边
+  line2: "#EFE9DF",
+  // Anthropic 赤陶强调
+  clay: "#CC785C",
+  clayDeep: "#B5613F",
+  claySoft: "#F2E2D9",
+  clayWash: "#FBF1EB",
+  // 语义
+  ok: "#6B7F5E",
+  okSoft: "#EAEDE2",
+  danger: "#C25B4E",
+  dangerSoft: "#F6E5E1",
+  proj: "#7A6A9E",      // 项目维度紫(柔和)
+  projSoft: "#ECE7F1",
+};
+const SERIF = "'Tiempos Text','Georgia',ui-serif,serif";
+const SANS = "'Styrene B','Inter',-apple-system,system-ui,sans-serif";
+const MONO = "'GT America Mono','SF Mono',ui-monospace,Menlo,monospace";
+
+// ── 数据 ──────────────────────────────────────────────────────
+// loop 状态：running 跑着没出结果 / converging 自动收敛中 / needYou 待你审
+//            / escalated 已升级攻关 / done 已收敛归档
+// 一个项目下挂多个 loop。needYou 与 escalated 会浮到顶部。
+const PROJECTS = [
+  {
+    id: "PRJ-auth", name: "Auth 服务 v3 迁移",
+    blurb: "把鉴权迁到新 token 体系，14 个长程任务并行推进。",
+    loops: [
+      { id: "loop-4471", title: "重写 refresh token 轮转逻辑", deliverable: "auth/refresh.ts",
+        state: "needYou", pri: "high", rounds: 0, runtime: "2h 14m", step: "41/41",
+        routeReason: "结果存疑：独立审查者发现并发竞态", confidence: "模型自评 92% · 审查者驳回" },
+      { id: "loop-4480", title: "生成 v3 迁移指南文档", deliverable: "docs/migration-v3.md",
+        state: "needYou", pri: "med", rounds: 0, runtime: "1h 02m", step: "23/23",
+        routeReason: "价值判断：弃用节奏需人拍板", confidence: "非对错问题 · 需你定方向" },
+      { id: "loop-4467", title: "统一错误码体系", deliverable: "errors/codes.ts",
+        state: "escalated", pri: "deep", rounds: 3, runtime: "4h 38m", step: "—",
+        routeReason: "循环已失效：3 轮自我归因未收敛", confidence: "改不动 · 建议进攻关" },
+      { id: "loop-4455", title: "JWT 校验中间件改造", deliverable: "auth/verify.ts",
+        state: "converging", pri: null, rounds: 1, runtime: "0h 47m", step: "18/22",
+        sub: "已自动收敛 1 轮 · 审查者复核中" },
+      { id: "loop-4448", title: "登录限流策略", deliverable: "auth/ratelimit.ts",
+        state: "running", pri: null, runtime: "0h 31m", step: "12/20" },
+      { id: "loop-4490", title: "迁移单元测试套件", deliverable: "tests/auth/*", 
+        state: "running", pri: null, runtime: "1h 09m", step: "30/55" },
+      { id: "loop-4493", title: "废弃旧 session 表", deliverable: "db/migrations",
+        state: "running", pri: null, runtime: "0h 18m", step: "5/14" },
+      { id: "loop-4496", title: "OAuth 回调兼容层", deliverable: "auth/oauth.ts",
+        state: "running", pri: null, runtime: "0h 52m", step: "21/33" },
+      { id: "loop-4401", title: "密钥轮换调度", deliverable: "auth/rotation.ts",
+        state: "done", pri: null, runtime: "1h 40m", step: "完成" },
+      { id: "loop-4402", title: "审计日志埋点", deliverable: "auth/audit.ts",
+        state: "done", pri: null, runtime: "0h 55m", step: "完成" },
+      { id: "loop-4403", title: "错误响应脱敏", deliverable: "auth/sanitize.ts",
+        state: "done", pri: null, runtime: "0h 40m", step: "完成" },
+      { id: "loop-4404", title: "刷新令牌存储迁移", deliverable: "store/refresh.ts",
+        state: "done", pri: null, runtime: "1h 12m", step: "完成" },
+      { id: "loop-4405", title: "登录指标看板", deliverable: "dash/login.tsx",
+        state: "done", pri: null, runtime: "0h 33m", step: "完成" },
+      { id: "loop-4406", title: "跨域 cookie 配置", deliverable: "config/cors.ts",
+        state: "done", pri: null, runtime: "0h 21m", step: "完成" },
+    ],
+  },
+  {
+    id: "PRJ-rag", name: "RAG 检索层重构",
+    blurb: "混合召回 + reranker 选型，结果质量分歧较大。",
+    loops: [
+      { id: "loop-4502", title: "选定 cross-encoder reranker", deliverable: "retrieval/rerank.py",
+        state: "needYou", pri: "med", rounds: 1, runtime: "3h 02m", step: "53/53",
+        routeReason: "结果分歧：两套方案召回率接近", confidence: "模型反复横跳 · 需你定调" },
+      { id: "loop-4510", title: "稠密向量索引构建", deliverable: "index/dense.py",
+        state: "converging", pri: null, rounds: 1, runtime: "1h 20m", step: "28/40",
+        sub: "已自动收敛 1 轮 · 审查者复核中" },
+      { id: "loop-4511", title: "稀疏 BM25 通道", deliverable: "index/sparse.py",
+        state: "running", pri: null, runtime: "0h 44m", step: "15/30" },
+      { id: "loop-4512", title: "MMR 去重逻辑", deliverable: "retrieval/mmr.py",
+        state: "running", pri: null, runtime: "0h 26m", step: "9/18" },
+      { id: "loop-4513", title: "召回评测集构建", deliverable: "eval/recall_set.json",
+        state: "running", pri: null, runtime: "1h 03m", step: "22/35" },
+      { id: "loop-4490b", title: "查询改写模块", deliverable: "query/rewrite.py",
+        state: "done", pri: null, runtime: "0h 50m", step: "完成" },
+      { id: "loop-4491b", title: "分块策略调优", deliverable: "chunk/strategy.py",
+        state: "done", pri: null, runtime: "1h 15m", step: "完成" },
+      { id: "loop-4492b", title: "向量库选型评估", deliverable: "docs/vecdb.md",
+        state: "done", pri: null, runtime: "0h 38m", step: "完成" },
+    ],
+  },
+  {
+    id: "PRJ-pay", name: "支付对账系统",
+    blurb: "全部在正轨，已替你判断「无需打扰」。",
+    loops: Array.from({ length: 11 }).map((_, i) => ({
+      id: `loop-46${10 + i}`,
+      title: ["交易流水拉取","对账规则引擎","差异检测","退款幂等校验","账期切分",
+        "异常工单生成","汇率快照","对账报表","审计留痕","告警阈值","定时任务编排"][i],
+      deliverable: "pay/*",
+      state: i < 6 ? "running" : "done", pri: null,
+      runtime: `${i % 3}h ${10 + i * 4}m`, step: i < 6 ? `${10 + i}/${30}` : "完成",
+    })),
+  },
+];
+
+// 状态显示规格
+const LOOP_STATE = {
+  needYou:    { label: "待你审", c: C.clay,   dot: C.clay },
+  escalated:  { label: "已升级攻关", c: C.danger, dot: C.danger },
+  converging: { label: "自动收敛中", c: C.proj,  dot: C.proj },
+  running:    { label: "运行中", c: C.dim,    dot: C.ok },
+  done:       { label: "已收敛", c: C.faint,  dot: C.faint },
+};
+const ATTENTION = new Set(["needYou", "escalated"]); // 会浮到顶部的
+
+// 项目统计
+function projStats(p) {
+  const need = p.loops.filter((l) => ATTENTION.has(l.state)).length;
+  const running = p.loops.filter((l) => l.state === "running" || l.state === "converging").length;
+  const done = p.loops.filter((l) => l.state === "done").length;
+  return { total: p.loops.length, need, running, done };
+}
+// loop 排序：注意项在前，再收敛中，再运行，再已完成
+const ORDER = { needYou: 0, escalated: 1, converging: 2, running: 3, done: 4 };
+function sortedLoops(p) {
+  return [...p.loops].sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+}
+const PRI = {
+  high: { label: "需判断", c: C.clay }, med: { label: "需拍板", c: "#B8923E" },
+  deep: { label: "需攻关", c: C.danger },
+};
+const REVIEW = {
+  verdict: "可疑",
+  summary: "新轮转逻辑在并发下会丢牌：先删旧 token 再发新 token 不是原子操作。模型的自我总结称此为「合理的单次使用设计」，但审查者认为这正是缺陷被掩盖处。",
+  suspect: "auth/refresh.ts:4-6 — 删除与签发之间存在竞态窗口",
+};
+
+// agent 产出的 HTML 产物 —— 每个元素可批注。
+// suspect:true 的元素是审查者点出的可疑处，批注它会触发收敛对比。
+const DOC = {
+  title: "Refresh Token 轮转逻辑 · 实现说明",
+  meta: "loop-4471 · 由 agent 自动生成 · auth/refresh.ts",
+  blocks: [
+    { id: "b1", kind: "h2", text: "设计目标" },
+    { id: "b2", kind: "p", text:
+      "将 refresh token 从「长期有效」改为「单次使用 + 轮转」：每次刷新都签发新的 refresh token，并使旧的立即失效，以缩小被盗用的时间窗口。" },
+    { id: "b3", kind: "h2", text: "核心实现" },
+    { id: "b4", kind: "p", text: "轮转函数接收旧 token，校验后删除旧记录、签发并存储新 token，最后返回新 token：" },
+    { id: "b5", kind: "code", suspect: true, text:
+`async function rotateRefresh(oldToken) {
+  const rec = await store.get(oldToken);
+  if (!rec) throw new InvalidToken();
+  await store.delete(oldToken);        // 先删旧
+  const next = mint(rec.userId);
+  await store.put(next, rec.userId);   // 再发新
+  return next;
+}` },
+    { id: "b6", kind: "callout", text:
+      "设计说明：采用「单次使用」语义，旧 token 一经使用即失效，符合 OAuth 2.0 refresh token rotation 推荐实践。" },
+    { id: "b7", kind: "h2", text: "失效策略" },
+    { id: "b8", kind: "table", text: "失效场景对照",
+      rows: [
+        ["场景", "处理"],
+        ["正常刷新", "旧 token 删除，签发新 token"],
+        ["旧 token 重放", "store 查不到 → InvalidToken"],
+        ["并发刷新", "「按单次使用语义自然处理」"],
+      ], suspectRow: 3 },
+    { id: "b9", kind: "p", text:
+      "测试覆盖：单元测试 12 例通过；集成测试 test_refresh_concurrent 当前为 flaky，偶发失败，已标记为待观察。" },
+  ],
+};
+
+const NAIVE_STEPS = [
+  { t: "你的批注", s: "并发下会丢牌，这个方向不对。", who: "you" },
+  { t: "agent 回应", s: "已修复 ✓ 我加了一条注释说明设计意图。", who: "bot", bad: true },
+  { t: "真实情况", s: "根因未触碰。agent 遇主观反馈「鬼隐」，做了表面改动。", who: "sys", bad: true },
+];
+const CONVERGE_STEPS = [
+  { t: "你的批注", s: "并发下会丢牌，这个方向不对。", who: "you" },
+  { t: "强制自我归因", s: "把批注 + 完整轨迹交给独立归因器：定位到第 4-6 行非原子操作，而非表面注释。", who: "sys" },
+  { t: "agent 重跑（仅受影响节点）", s: "改用 CAS 原子换牌；并发测试通过。", who: "bot" },
+  { t: "收敛判据", s: "审查者复核 → 缺陷消失，循环收敛。无需你看过程。", who: "sys", good: true },
+];
+const TRACE = [
+  { id: "n1", title: "梳理现有错误码", state: "ok" },
+  { id: "n2", title: "设计统一 code 枚举", state: "ok" },
+  { id: "n3", title: "映射旧码到新码", state: "bad", note: "← 3 轮都栽在这" },
+  { id: "n4", title: "生成兼容层", state: "stuck" },
+];
+
+// ─────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState("hub");
+  const [proj, setProj] = useState(PROJECTS[0]);
+  const [active, setActive] = useState(null);
+
+  function openResult(r) {
+    setActive(r);
+    setScreen(r.state === "escalated" ? "deep" : "result");
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.body,
+      fontFamily: SANS, fontSize: 14, display: "flex" }}>
+      <style>{css}</style>
+      <Sidebar proj={proj} setProj={(p) => { setProj(p); setScreen("hub"); }}
+        screen={screen} onHome={() => setScreen("hub")} />
+      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <Topbar screen={screen} />
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 40px 90px" }}>
+            {screen === "hub" && <Hub proj={proj} onOpen={openResult} />}
+            {screen === "result" && active && (
+              <ResultScreen r={active} proj={proj} onBack={() => setScreen("hub")} onEscalate={() => setScreen("deep")} />
+            )}
+            {screen === "deep" && active && (
+              <DeepScreen r={active} proj={proj} onBack={() => setScreen("hub")} />
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ── 左侧栏（Cowork 风格）──────────────────────────────────────
+function Sidebar({ proj, setProj, onHome }) {
+  return (
+    <aside style={{ width: 248, flexShrink: 0, background: C.surface,
+      borderRight: `1px solid ${C.line}`, height: "100vh", display: "flex",
+      flexDirection: "column", padding: "20px 14px" }}>
+      <button onClick={onHome} style={{ all: "unset", cursor: "pointer", display: "flex",
+        alignItems: "center", gap: 10, padding: "4px 8px", marginBottom: 24 }}>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: C.clay,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 2, background: C.surface }} />
+        </span>
+        <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: C.ink, letterSpacing: ".2px" }}>
+          Converge
+        </span>
+      </button>
+
+      <NavItem icon="◇" label="项目总览" active onClick={onHome} />
+      <NavItem icon="◷" label="待我处理" badge={String(PROJECTS.flatMap(p=>p.loops).filter(l=>l.state==="needYou").length)} />
+      <NavItem icon="⎙" label="已收敛" />
+      <NavItem icon="⚑" label="攻关中" badgeDanger={String(PROJECTS.flatMap(p=>p.loops).filter(l=>l.state==="escalated").length)} />
+
+      <div style={{ fontSize: 11, color: C.faint, fontFamily: MONO, letterSpacing: ".5px",
+        padding: "20px 10px 8px", textTransform: "uppercase" }}>项目</div>
+      {PROJECTS.map((p) => {
+        const on = p.id === proj.id;
+        const st = projStats(p);
+        return (
+          <button key={p.id} onClick={() => setProj(p)} style={{ all: "unset", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8,
+            marginBottom: 2, background: on ? C.claySoft : "transparent", transition: "background .12s" }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              background: st.need > 0 ? C.clay : C.ok }} />
+            <span style={{ flex: 1, fontSize: 13, color: on ? C.ink : C.body, fontWeight: on ? 600 : 400,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</span>
+            {st.need > 0 && (
+              <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.clay }}>{st.need}</span>
+            )}
+          </button>
+        );
+      })}
+
+      <div style={{ marginTop: "auto", padding: "10px", borderTop: `1px solid ${C.line2}`,
+        display: "flex", alignItems: "center", gap: 9 }}>
+        <span style={{ width: 26, height: 26, borderRadius: "50%", background: C.projSoft,
+          color: C.proj, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>D</span>
+        <span style={{ fontSize: 12.5, color: C.dim }}>Dong · 工作区</span>
+      </div>
+    </aside>
+  );
+}
+function NavItem({ icon, label, active, badge, badgeDanger, onClick }) {
+  return (
+    <button onClick={onClick} style={{ all: "unset", cursor: "pointer", display: "flex",
+      alignItems: "center", gap: 11, padding: "8px 10px", borderRadius: 8, marginBottom: 2,
+      background: active ? C.clayWash : "transparent" }}>
+      <span style={{ fontSize: 14, color: active ? C.clay : C.dim, width: 16 }}>{icon}</span>
+      <span style={{ flex: 1, fontSize: 13.5, color: active ? C.ink : C.body, fontWeight: active ? 600 : 400 }}>{label}</span>
+      {badge && <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.clay,
+        background: C.claySoft, borderRadius: 10, padding: "1px 7px" }}>{badge}</span>}
+      {badgeDanger && <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.danger,
+        background: C.dangerSoft, borderRadius: 10, padding: "1px 7px" }}>{badgeDanger}</span>}
+    </button>
+  );
+}
+
+// ── 顶栏（细，面包屑式）───────────────────────────────────────
+function Topbar({ screen }) {
+  const map = { hub: "项目总览", result: "结果审阅", deep: "攻关模式" };
+  const all = PROJECTS.flatMap((p) => p.loops);
+  const runN = all.filter((l) => l.state === "running" || l.state === "converging").length;
+  const needN = all.filter((l) => ATTENTION.has(l.state)).length;
+  return (
+    <div style={{ height: 56, flexShrink: 0, borderBottom: `1px solid ${C.line}`,
+      background: "rgba(251,249,245,.8)", backdropFilter: "blur(8px)", display: "flex",
+      alignItems: "center", padding: "0 40px", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>{map[screen]}</span>
+        <span style={{ fontSize: 12, color: C.faint, fontFamily: MONO }}>
+          人只看结果 · 改不动的才看过程
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <Pill>{runN} 个 loop 在跑</Pill>
+        <Pill tone="clay">{needN} 待我</Pill>
+      </div>
+    </div>
+  );
+}
+function Pill({ children, tone }) {
+  const clay = tone === "clay";
+  return (
+    <span style={{ fontFamily: MONO, fontSize: 11, padding: "4px 11px", borderRadius: 20,
+      background: clay ? C.claySoft : C.surface2, color: clay ? C.clayDeep : C.dim,
+      border: `1px solid ${clay ? "transparent" : C.line}` }}>{children}</span>
+  );
+}
+
+// ── 屏 1：项目总览（项目 → 多 loop）─────────────────────────────
+function Hub({ proj, onOpen }) {
+  const st = projStats(proj);
+  const loops = sortedLoops(proj);
+  const attn = loops.filter((l) => ATTENTION.has(l.state));
+  const conv = loops.filter((l) => l.state === "converging");
+  const run = loops.filter((l) => l.state === "running");
+  const done = loops.filter((l) => l.state === "done");
+
+  return (
+    <div className="fade">
+      <header style={{ padding: "44px 0 30px" }}>
+        <div style={{ fontFamily: MONO, fontSize: 12, color: C.clay, letterSpacing: 1, marginBottom: 16 }}>
+          人类的理解，才是瓶颈
+        </div>
+        <h1 style={{ margin: 0, fontFamily: SERIF, fontSize: 34, lineHeight: 1.25, fontWeight: 500,
+          color: C.ink, letterSpacing: "-.3px", maxWidth: 680 }}>
+          一个项目下，多个 loop 并行跑。<br />
+          只有<span style={{ color: C.clay }}>该你拍板的</span>才浮上来。
+        </h1>
+        <p style={{ margin: "18px 0 0", color: C.dim, maxWidth: 600, lineHeight: 1.7, fontSize: 15 }}>
+          一小时长程任务的偏差会落在结果里。你批注结果，模型自己归因重跑；
+          改不动的极少数，才请你打开看过程。
+        </p>
+      </header>
+
+      {/* 项目概览卡 */}
+      <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16,
+        padding: "22px 24px", marginBottom: 30 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 21, fontWeight: 500, color: C.ink }}>{proj.name}</h2>
+          <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{proj.id}</span>
+        </div>
+        <p style={{ margin: "0 0 18px", color: C.body, fontSize: 14, lineHeight: 1.6 }}>{proj.blurb}</p>
+        <StatusStrip loops={loops} />
+        <div style={{ display: "flex", gap: 22, marginTop: 16, fontFamily: MONO, fontSize: 12, flexWrap: "wrap" }}>
+          <Stat n={st.total} t="loop" />
+          <Stat n={st.need} t="待你" tone={st.need ? "clay" : "ok"} />
+          <Stat n={st.running} t="在跑" tone="ok" />
+          <Stat n={st.done} t="已收敛" />
+        </div>
+      </div>
+
+      {/* 1. 需要你的 loop（浮顶）*/}
+      {attn.length > 0 && (
+        <Section title="需要你" hint="结果存疑 / 价值判断 / 循环失效">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {attn.map((l) => <LoopCard key={l.id} l={l} onOpen={onOpen} prominent />)}
+          </div>
+        </Section>
+      )}
+
+      {/* 2. 自动收敛中（系统在替你处理，不必看）*/}
+      {conv.length > 0 && (
+        <Section title="自动收敛中" hint="系统在替你迭代，收住了就归档，不必打扰你">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {conv.map((l) => <LoopRow key={l.id} l={l} />)}
+          </div>
+        </Section>
+      )}
+
+      {/* 3. 运行中（安静网格）*/}
+      {run.length > 0 && (
+        <Section title="运行中" hint={`${run.length} 个长程任务在跑，尚未产出结果`}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 8 }}>
+            {run.map((l) => <LoopChip key={l.id} l={l} />)}
+          </div>
+        </Section>
+      )}
+
+      {/* 4. 已收敛（折叠）*/}
+      {done.length > 0 && <DoneFold loops={done} />}
+    </div>
+  );
+}
+
+function Section({ title, hint, children }) {
+  return (
+    <div style={{ marginBottom: 30 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>{title}</h3>
+        <span style={{ color: C.faint, fontFamily: MONO, fontSize: 11 }}>{hint}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// 概览条：每个 loop 一格，颜色=状态
+function StatusStrip({ loops }) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {loops.map((l) => {
+        const s = LOOP_STATE[l.state];
+        const lit = ATTENTION.has(l.state);
+        return (
+          <div key={l.id} title={`${l.id} · ${s.label}`} style={{ flex: 1, height: 9, borderRadius: 3,
+            background: lit ? s.dot : l.state === "converging" ? C.projSoft : l.state === "done" ? C.line2 : C.okSoft,
+            border: `1px solid ${lit ? "transparent" : C.line}` }} />
+        );
+      })}
+    </div>
+  );
+}
+
+function Stat({ n, t, tone }) {
+  const c = tone === "ok" ? C.ok : tone === "clay" ? C.clay : C.ink;
+  return (
+    <span style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+      <span style={{ fontSize: 17, fontWeight: 700, color: c }}>{n}</span>
+      <span style={{ color: C.dim }}>{t}</span>
+    </span>
+  );
+}
+
+// 已收敛折叠区
+function DoneFold({ loops }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 30 }}>
+      <button onClick={() => setOpen(!open)} style={{ all: "unset", cursor: "pointer", display: "flex",
+        alignItems: "center", gap: 9, marginBottom: open ? 14 : 0, color: C.dim, fontSize: 14 }}>
+        <span style={{ fontSize: 12, color: C.faint }}>{open ? "▾" : "▸"}</span>
+        <span style={{ fontWeight: 600 }}>已收敛 {loops.length} 个</span>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint }}>· 通过独立审查，已归档</span>
+      </button>
+      {open && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 8 }}>
+          {loops.map((l) => <LoopChip key={l.id} l={l} muted />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 需要你的 loop —— 大卡片
+function LoopCard({ l, onOpen, prominent }) {
+  const p = l.pri ? PRI[l.pri] : { label: LOOP_STATE[l.state].label, c: LOOP_STATE[l.state].c };
+  const [h, setH] = useState(false);
+  return (
+    <button onClick={() => onOpen(l)} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+      style={{ all: "unset", cursor: "pointer", display: "block", background: h ? C.raised : C.surface,
+        border: `1px solid ${h ? C.clay + "66" : C.line}`, borderLeft: `3px solid ${p.c}`,
+        borderRadius: 14, padding: "17px 20px", transition: "all .14s",
+        boxShadow: h ? "0 2px 12px rgba(204,120,92,.08)" : "none" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", gap: 9, alignItems: "center", marginBottom: 9 }}>
+            <span style={{ fontFamily: MONO, fontSize: 10, color: p.c, border: `1px solid ${p.c}66`,
+              borderRadius: 20, padding: "2px 9px", background: p.c === C.clay ? C.claySoft : "transparent" }}>{p.label}</span>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint }}>{l.id}</span>
+            {l.rounds > 0 && <span style={{ fontFamily: MONO, fontSize: 10,
+              color: l.state === "escalated" ? C.danger : C.dim }}>已 {l.rounds} 轮</span>}
+          </div>
+          <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500, color: C.ink, marginBottom: 6 }}>{l.title}</div>
+          <div style={{ color: C.dim, fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ color: p.c, fontFamily: MONO, fontSize: 12 }}>{l.routeReason}</span>
+            <span style={{ color: C.faint }}>　·　{l.deliverable}</span>
+          </div>
+        </div>
+        <div style={{ textAlign: "right", fontFamily: MONO, fontSize: 11, color: C.faint, whiteSpace: "nowrap", paddingTop: 2 }}>
+          <div style={{ maxWidth: 120, whiteSpace: "normal", lineHeight: 1.45 }}>{l.confidence}</div>
+          <div style={{ marginTop: 12, color: h ? p.c : C.faint }}>
+            {l.state === "escalated" ? "进攻关 →" : "看结果 →"}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// 自动收敛中 —— 行
+function LoopRow({ l }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.surface,
+      border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px" }}>
+      <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.proj, flexShrink: 0 }}
+        className="breathe" />
+      <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint, width: 70, flexShrink: 0 }}>{l.id}</span>
+      <span style={{ flex: 1, fontSize: 13.5, color: C.ink, fontWeight: 500 }}>{l.title}</span>
+      <span style={{ fontSize: 12, color: C.proj, fontFamily: MONO }}>{l.sub}</span>
+      <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint, width: 48, textAlign: "right" }}>{l.step}</span>
+    </div>
+  );
+}
+
+// 运行中 / 已收敛 —— 小芯片
+function LoopChip({ l, muted }) {
+  const s = LOOP_STATE[l.state];
+  return (
+    <div style={{ background: muted ? "transparent" : C.surface, border: `1px solid ${C.line}`,
+      borderRadius: 11, padding: "11px 13px", opacity: muted ? .65 : 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }}
+          className={l.state === "running" ? "breathe" : ""} />
+        <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.faint }}>{l.id}</span>
+        <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 10.5, color: s.c }}>
+          {l.state === "done" ? "✓" : l.step}
+        </span>
+      </div>
+      <div style={{ fontSize: 13, color: muted ? C.dim : C.ink, fontWeight: 500, lineHeight: 1.35 }}>{l.title}</div>
+    </div>
+  );
+}
+
+// ── 屏 2：结果批注 + 收敛循环 ─────────────────────────────────
+function ResultScreen({ r, proj, onBack, onEscalate }) {
+  const [phase, setPhase] = useState("annotate"); // annotate | naive | converge
+  const [notes, setNotes] = useState({});          // { blockId: text }
+  const [active, setActive] = useState(null);      // 正在批注的 blockId
+
+  const suspectId = DOC.blocks.find((b) => b.suspect)?.id;
+  const suspectAnnotated = !!notes[suspectId];
+
+  function addNote(id, text) {
+    setNotes((n) => ({ ...n, [id]: text }));
+    setActive(null);
+  }
+  function removeNote(id) {
+    setNotes((n) => { const m = { ...n }; delete m[id]; return m; });
+  }
+
+  return (
+    <div className="fade" style={{ paddingTop: 28 }}>
+      <Crumb proj={proj} r={r} onBack={onBack} />
+
+      {/* 审查者裁决条 */}
+      <div style={{ background: C.surface, border: `1px solid ${C.danger}44`, borderRadius: 14,
+        padding: "14px 18px", marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: C.danger, border: `1px solid ${C.danger}66`,
+            borderRadius: 20, padding: "2px 10px", background: C.dangerSoft }}>独立审查：{REVIEW.verdict}</span>
+          <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint }}>点击任意文档元素 · 在右侧批注</span>
+        </div>
+        <p style={{ margin: 0, color: C.body, fontSize: 13, lineHeight: 1.6 }}>{REVIEW.summary}</p>
+      </div>
+
+      {phase === "annotate" && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 18, alignItems: "start" }}>
+          {/* 左：可批注的 HTML 产物（点击选中元素，不就地展开）*/}
+          <AnnotatableDoc notes={notes} active={active}
+            onPick={setActive} suspectId={suspectId} />
+
+          {/* 右：批注侧栏（输入与列表都在这里）*/}
+          <NotePanel notes={notes} active={active} onRemove={removeNote}
+            onAdd={addNote} onCancel={() => setActive(null)} suspectId={suspectId}
+            suspectAnnotated={suspectAnnotated}
+            onSubmit={() => setPhase("naive")} />
+        </div>
+      )}
+
+      {/* 提交后：收敛对比 */}
+      {phase !== "annotate" && (
+        <>
+          <Eyebrow t={`你批注了「${shortBlock(DOC.blocks.find(b=>b.id===suspectId))}」· 看同一条批注的两种命运`} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+            <Lane title="多数产品：直接把批注丢回 agent" tone="bad">
+              {NAIVE_STEPS.map((s, i) => <Turn key={i} s={s} />)}
+              <Stamp tone="bad" text="循环假收敛 · 你被一句「已修复」骗过" />
+            </Lane>
+            <Lane title="Converge：锚定元素 + 强制归因 + 收敛判据" tone="ok"
+              locked={phase === "naive"} onUnlock={() => setPhase("converge")}>
+              {phase !== "naive" && CONVERGE_STEPS.map((s, i) => <Turn key={i} s={s} />)}
+              {phase !== "naive" && <Stamp tone="ok" text="审查者复核通过 · 真收敛，无需你看过程" />}
+            </Lane>
+          </div>
+
+          {phase === "converge" && (
+            <div style={{ marginTop: 20, display: "flex", gap: 14, alignItems: "center",
+              background: C.okSoft, border: `1px solid ${C.ok}44`, borderRadius: 14, padding: "16px 20px" }}>
+              <span style={{ color: C.ok, fontSize: 18 }}>✓</span>
+              <div style={{ flex: 1, color: C.body, fontSize: 13.5, lineHeight: 1.6 }}>
+                <b style={{ color: C.ink }}>这一个结果收敛了。</b> 你的批注锚定在那段代码上，模型据此归因重跑，
+                没让你打开那一小时过程。正因为多数循环自己就收住了，你才能同时管几十个 loop。
+              </div>
+              <button onClick={onBack} style={btnGhost}>回项目台</button>
+            </div>
+          )}
+
+          <div style={{ marginTop: 18, display: "flex", gap: 10, alignItems: "center",
+            color: C.dim, fontSize: 12.5, fontFamily: MONO }}>
+            <span>若反复改不动 →</span>
+            <button onClick={onEscalate} style={{ all: "unset", cursor: "pointer", color: C.danger,
+              borderBottom: `1px dashed ${C.danger}` }}>看已升级的攻关案例 →</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function shortBlock(b) {
+  if (!b) return "代码块";
+  if (b.kind === "code") return "rotateRefresh 代码块";
+  if (b.kind === "table") return b.text;
+  return (b.text || "").slice(0, 14) + "…";
+}
+
+// ── 可批注的 HTML 文档（点击选中，批注在右侧）──────────────────
+function AnnotatableDoc({ notes, active, onPick, suspectId }) {
+  return (
+    <div style={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 14,
+      overflow: "hidden" }}>
+      {/* 文档头 */}
+      <div style={{ padding: "16px 22px", borderBottom: `1px solid ${C.line2}`, background: C.surface }}>
+        <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 500, color: C.ink, marginBottom: 4 }}>{DOC.title}</div>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: C.faint }}>{DOC.meta}</div>
+      </div>
+      {/* 文档体 */}
+      <div style={{ padding: "10px 14px 22px" }}>
+        {DOC.blocks.map((b) => (
+          <AnnBlock key={b.id} b={b} note={notes[b.id]} isActive={active === b.id}
+            isSuspect={b.id === suspectId} onPick={() => onPick(b.id)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AnnBlock({ b, note, isActive, isSuspect, onPick }) {
+  const [hover, setHover] = useState(false);
+  const annotated = !!note;
+  const wrapBase = {
+    position: "relative", borderRadius: 8, transition: "background .12s, box-shadow .12s",
+    cursor: "pointer", margin: "2px 0", padding: "6px 10px",
+    background: isActive ? C.claySoft : annotated ? C.clayWash : hover ? C.line2 + "88" : "transparent",
+    boxShadow: isActive ? `0 0 0 2px ${C.clay}` : annotated ? `inset 3px 0 0 ${C.clay}` : "none",
+  };
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div style={wrapBase} onClick={onPick}>
+        {/* 角标：已批注 / 可批注 / 审查者标记 */}
+        {annotated ? (
+          <Corner color={C.clay} bg={C.surface2} bordered text="✎ 已批注" />
+        ) : isActive ? (
+          <Corner color="#FFF" bg={C.clay} text="批注中 →" />
+        ) : isSuspect ? (
+          <Corner color={C.danger} bg={C.dangerSoft} text="⚠ 审查者标记" />
+        ) : hover ? (
+          <Corner color={C.faint} bg={C.surface2} bordered text="＋ 批注" />
+        ) : null}
+        <BlockBody b={b} />
+      </div>
+    </div>
+  );
+}
+
+function Corner({ color, bg, bordered, text }) {
+  return (
+    <span style={{ position: "absolute", top: 4, right: 6, fontFamily: MONO, fontSize: 10,
+      color, background: bg, borderRadius: 6, padding: "1px 7px",
+      border: bordered ? `1px solid ${C.line}` : "none", zIndex: 1 }}>{text}</span>
+  );
+}
+
+function BlockBody({ b }) {
+  if (b.kind === "h2")
+    return <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: C.ink, margin: "6px 0 2px" }}>{b.text}</div>;
+  if (b.kind === "p")
+    return <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: C.body }}>{b.text}</p>;
+  if (b.kind === "code")
+    return (
+      <pre style={{ margin: 0, fontFamily: MONO, fontSize: 12.5, lineHeight: 1.65, color: C.ink,
+        background: C.bg, border: `1px solid ${C.line}`, borderRadius: 8, padding: "12px 14px",
+        overflowX: "auto", whiteSpace: "pre" }}>{b.text}</pre>
+    );
+  if (b.kind === "callout")
+    return (
+      <div style={{ fontSize: 13, lineHeight: 1.6, color: C.clayDeep, background: C.clayWash,
+        borderRadius: 8, padding: "10px 13px" }}>{b.text}</div>
+    );
+  if (b.kind === "table")
+    return (
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <tbody>
+          {b.rows.map((row, ri) => (
+            <tr key={ri} style={{ background: ri === 0 ? C.surface : ri === b.suspectRow ? C.dangerSoft + "66" : "transparent" }}>
+              {row.map((cell, ci) => (
+                <td key={ci} style={{ border: `1px solid ${C.line}`, padding: "7px 11px",
+                  fontWeight: ri === 0 ? 600 : 400, color: ri === 0 ? C.ink : C.body,
+                  fontFamily: ri === 0 ? SANS : SANS }}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  return null;
+}
+
+// ── 批注侧栏（输入 + 列表都在右侧）────────────────────────────
+function NotePanel({ notes, active, onAdd, onRemove, onCancel, suspectId, suspectAnnotated, onSubmit }) {
+  const ids = Object.keys(notes);
+  const activeBlock = active ? DOC.blocks.find((b) => b.id === active) : null;
+
+  return (
+    <div style={{ position: "sticky", top: 16, background: C.surface, border: `1px solid ${C.line}`,
+      borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ padding: "13px 16px", borderBottom: `1px solid ${C.line2}`, display: "flex",
+        alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600, color: C.ink }}>批注</span>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint }}>{ids.length} 条</span>
+      </div>
+
+      {/* 顶部：针对当前选中元素的输入框 */}
+      {activeBlock ? (
+        <NoteEditor key={active} block={activeBlock} initial={notes[active]}
+          suspect={active === suspectId}
+          onSave={(t) => onAdd(active, t)} onCancel={onCancel} />
+      ) : (
+        <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.line2}`,
+          color: C.faint, fontSize: 12.5, lineHeight: 1.6, background: C.surface2 }}>
+          点击左侧文档的任意元素，在这里写下批注。每条都会锚定到你选中的元素。
+        </div>
+      )}
+
+      {/* 批注列表 */}
+      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 9, maxHeight: 320, overflowY: "auto" }}>
+        {ids.length === 0 ? (
+          <div style={{ color: C.faint, fontSize: 12, lineHeight: 1.6, padding: "4px 4px" }}>
+            还没有批注。
+          </div>
+        ) : ids.map((id) => {
+          const b = DOC.blocks.find((x) => x.id === id);
+          const isEditing = id === active;
+          return (
+            <div key={id}
+              style={{ background: isEditing ? C.claySoft : C.surface2,
+                border: `1px solid ${isEditing ? C.clay + "66" : C.line}`,
+                borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                <span style={{ fontFamily: MONO, fontSize: 10, color: C.clay, background: C.claySoft,
+                  borderRadius: 5, padding: "1px 7px" }}>↳ {shortBlock(b)}</span>
+                <button onClick={() => onRemove(id)} style={{ all: "unset", cursor: "pointer",
+                  color: C.faint, fontSize: 13 }}>✕</button>
+              </div>
+              <div style={{ fontSize: 12.5, color: C.ink, lineHeight: 1.5 }}>{notes[id]}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: 12, borderTop: `1px solid ${C.line2}` }}>
+        {!suspectAnnotated && (
+          <div style={{ fontFamily: MONO, fontSize: 10.5, color: C.faint, marginBottom: 9, lineHeight: 1.5 }}>
+            提示：审查者标记的那段代码（⚠）最值得你批注。
+          </div>
+        )}
+        <button onClick={onSubmit} disabled={ids.length === 0}
+          style={{ ...btnPrimary, opacity: ids.length ? 1 : .4,
+            cursor: ids.length ? "pointer" : "not-allowed" }}>
+          提交批注 · 看会发生什么
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 右侧输入框（针对选中元素）
+function NoteEditor({ block, initial, suspect, onSave, onCancel }) {
+  const [v, setV] = useState(initial || "");
+  return (
+    <div className="fade" style={{ padding: 14, borderBottom: `1px solid ${C.line2}`,
+      background: C.clayWash }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+        <span style={{ fontFamily: MONO, fontSize: 10, color: "#FFF", background: C.clay,
+          borderRadius: 5, padding: "2px 8px" }}>↳ {shortBlock(block)}</span>
+        <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.dim }}>批注锚定到此元素</span>
+      </div>
+      <textarea autoFocus value={v} onChange={(e) => setV(e.target.value)} rows={3}
+        placeholder={suspect ? "例：先删后发不是原子操作，并发下会丢牌。换 CAS 原子换牌。" : "写下你对这个元素的意见…"}
+        style={{ width: "100%", boxSizing: "border-box", resize: "none", background: C.surface2,
+          border: `1px solid ${C.line}`, borderRadius: 8, color: C.ink, padding: "9px 11px",
+          fontFamily: SANS, fontSize: 13.5, lineHeight: 1.5, outline: "none" }} />
+      <div style={{ display: "flex", gap: 8, marginTop: 9 }}>
+        <button onClick={() => v.trim() && onSave(v.trim())} disabled={!v.trim()}
+          style={{ ...btnPrimary, width: "auto", padding: "7px 15px", fontSize: 12.5,
+            opacity: v.trim() ? 1 : .45, cursor: v.trim() ? "pointer" : "not-allowed" }}>
+          {initial ? "更新批注" : "保存批注"}
+        </button>
+        <button onClick={onCancel} style={{ ...btnGhost, padding: "7px 14px", fontSize: 12.5 }}>取消</button>
+      </div>
+    </div>
+  );
+}
+
+function Lane({ title, tone, children, locked, onUnlock }) {
+  const col = tone === "bad" ? C.danger : C.ok;
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${col}33`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.line2}`, fontSize: 12.5,
+        fontWeight: 600, color: col }}>{title}</div>
+      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, minHeight: 88 }}>
+        {locked ? (
+          <button onClick={onUnlock} style={{ all: "unset", cursor: "pointer", textAlign: "center",
+            color: C.ok, fontSize: 13, padding: "22px 0", border: `1px dashed ${C.ok}55`, borderRadius: 10 }}>
+            ▶ 看 Converge 怎么处理同一条批注
+          </button>
+        ) : children}
+      </div>
+    </div>
+  );
+}
+function Turn({ s }) {
+  const map = {
+    you: { c: C.clay, lbl: "你" },
+    bot: { c: s.bad ? C.danger : C.ok, lbl: "agent" },
+    sys: { c: s.bad ? C.danger : C.proj, lbl: "系统" },
+  };
+  const m = map[s.who];
+  return (
+    <div className="fade" style={{ display: "flex", gap: 10 }}>
+      <span style={{ fontFamily: MONO, fontSize: 10, color: m.c, width: 40, flexShrink: 0, paddingTop: 2 }}>{m.lbl}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 11, color: C.faint, marginBottom: 3 }}>{s.t}</div>
+        <div style={{ fontSize: 13, color: s.bad ? C.danger : C.ink, lineHeight: 1.55 }}>{s.s}</div>
+      </div>
+    </div>
+  );
+}
+function Stamp({ tone, text }) {
+  const col = tone === "bad" ? C.danger : C.ok;
+  return (
+    <div style={{ marginTop: 4, fontFamily: MONO, fontSize: 11, color: col,
+      background: tone === "bad" ? C.dangerSoft : C.okSoft, borderRadius: 8, padding: "8px 11px" }}>
+      {tone === "bad" ? "✕ " : "✓ "}{text}
+    </div>
+  );
+}
+
+// ── 屏 3：攻关模式 ────────────────────────────────────────────
+function DeepScreen({ r, proj, onBack }) {
+  return (
+    <div className="fade" style={{ paddingTop: 28 }}>
+      <Crumb proj={proj} r={{ ...r, title: r.title || "统一错误码体系" }} onBack={onBack} />
+
+      <div style={{ background: C.dangerSoft, border: `1px solid ${C.danger}55`, borderRadius: 14,
+        padding: "15px 18px", display: "flex", gap: 12, alignItems: "center", marginBottom: 24 }}>
+        <span style={{ color: C.danger, fontSize: 16 }}>⏏</span>
+        <div style={{ fontSize: 13.5, lineHeight: 1.55, color: C.ink }}>
+          <b>阀门触发：结果级循环已失效。</b>
+          <span style={{ color: C.body }}> 系统替你跑了 3 轮「批注→归因→重跑」，每轮都栽在同一处、且无收敛迹象。现在——也只有现在——请你打开过程。</span>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.05fr 1fr", gap: 20, alignItems: "start" }}>
+        <div>
+          <Eyebrow t="过程轨迹 · 折叠成一屏，红色标出反复栽倒处" noTop />
+          <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: 10 }}>
+            {TRACE.map((n) => {
+              const m = { ok: [C.ok, "✓"], bad: [C.danger, "✕"], stuck: [C.clay, "⏸"] }[n.state];
+              return (
+                <div key={n.id} style={{ display: "flex", gap: 11, alignItems: "center", padding: "12px",
+                  borderRadius: 10, marginBottom: 4, background: n.state === "bad" ? C.dangerSoft : "transparent" }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0, background: m[0] + "22",
+                    color: m[0], fontSize: 11, fontFamily: MONO, display: "flex", alignItems: "center", justifyContent: "center" }}>{m[1]}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.faint, width: 22 }}>{n.id}</span>
+                  <span style={{ flex: 1, fontSize: 14, color: n.state === "ok" ? C.dim : C.ink,
+                    fontWeight: n.state === "ok" ? 400 : 600 }}>{n.title}</span>
+                  {n.note && <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.danger }}>{n.note}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <Eyebrow t="为什么自动收敛失败 · 三轮留痕" noTop />
+          <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16,
+            display: "flex", flexDirection: "column", gap: 13 }}>
+            {[
+              ["第 1 轮", "归因到命名风格，改了枚举名。审查者：根因未动。"],
+              ["第 2 轮", "归因到映射表缺项，补了 3 条。审查者：仍漏旧码段。"],
+              ["第 3 轮", "归因到兼容层，重写。审查者：与新枚举循环依赖。"],
+            ].map(([k, v], i) => (
+              <div key={i} style={{ display: "flex", gap: 10 }}>
+                <span style={{ fontFamily: MONO, fontSize: 10.5, color: C.danger, width: 38, flexShrink: 0, paddingTop: 2 }}>{k}</span>
+                <span style={{ fontSize: 13, color: C.body, lineHeight: 1.55 }}>{v}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.6, background: C.clayWash,
+              borderRadius: 10, padding: "11px 13px" }}>
+              系统判断：三轮归因在「症状」间打转，未触达「旧码与新枚举的根本结构冲突」。这是模型当前盲区 —— 该你下场重新定义问题了。
+            </div>
+            <button onClick={onBack} style={btnPrimary}>我来接管这个根因 →</button>
+          </div>
+        </div>
+      </div>
+
+      <p style={{ marginTop: 22, color: C.dim, fontSize: 13, lineHeight: 1.65, maxWidth: 720 }}>
+        你打开过程，是因为系统已证明「结果级反馈这条便宜的路走不通」。这正是省下平庸注意力、
+        把它攒到这一刻的意义 —— 攻关只发生在真正配得上你智力的地方。
+      </p>
+    </div>
+  );
+}
+
+// ── 公共件 ────────────────────────────────────────────────────
+function Crumb({ proj, r, onBack }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap", marginBottom: 8 }}>
+      <button onClick={onBack} style={{ all: "unset", cursor: "pointer", color: C.dim, fontSize: 13, fontFamily: MONO }}>← 项目台</button>
+      <span style={{ color: C.faint }}>/</span>
+      <span style={{ fontFamily: MONO, fontSize: 12, color: C.proj }}>{proj.id}</span>
+      <span style={{ color: C.faint }}>/</span>
+      <span style={{ fontFamily: MONO, fontSize: 12, color: C.faint }}>{r.id}</span>
+      <span style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: C.ink }}>{r.title}</span>
+    </div>
+  );
+}
+function Eyebrow({ t, noTop }) {
+  return (
+    <div style={{ display: "flex", gap: 9, alignItems: "center", margin: noTop ? "0 0 12px" : "26px 0 12px" }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.clay }} />
+      <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim, letterSpacing: ".4px" }}>{t}</span>
+    </div>
+  );
+}
+const btnPrimary = {
+  all: "unset", cursor: "pointer", textAlign: "center", padding: "10px 18px", borderRadius: 10,
+  background: C.clay, color: "#FFF", fontWeight: 600, fontSize: 13.5, display: "block", width: "100%", boxSizing: "border-box",
+};
+const btnGhost = {
+  all: "unset", cursor: "pointer", padding: "9px 16px", borderRadius: 9,
+  border: `1px solid ${C.line}`, color: C.body, fontSize: 13, whiteSpace: "nowrap", background: C.surface2,
+};
+
+const css = `
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .fade { animation: fade .3s ease both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
+  .breathe { animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  textarea::placeholder { color: ${C.faint}; }
+  button:focus-visible { outline: 2px solid ${C.clay}; outline-offset: 2px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: ${C.line}; border-radius: 5px; border: 3px solid ${C.bg}; }
+  @media (max-width: 920px) {
+    aside { display: none !important; }
+    h1 { font-size: 26px !important; }
+    [style*="grid-template-columns: 1fr 1fr"], [style*="grid-template-columns: 1.05fr 1fr"] { grid-template-columns: 1fr !important; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+`;
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
