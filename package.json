@@ -1,0 +1,24 @@
+{
+  "name": "super-builder",
+  "version": "0.1.0",
+  "description": "面向超级个体的工作台 — 1 个人指挥几十上百个 agent 并行完成项目",
+  "main": "./out/main/index.js",
+  "author": "Dong",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-vite": "^2.3.0",
+    "vite": "^5.4.10",
+    "@vitejs/plugin-react": "^4.3.3"
+  }
+}
