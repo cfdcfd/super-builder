@@ -1,9 +1,9 @@
 import { C, MONO } from '../constants'
-import { PROJECTS, ATTENTION } from '../data'
+import { ATTENTION } from '../data'
 
-export default function Topbar({ screen }) {
+export default function Topbar({ screen, projects }) {
   const map = { hub: "项目总览", result: "结果审阅", deep: "攻关模式" }
-  const all = PROJECTS.flatMap((p) => p.loops)
+  const all = projects.flatMap((p) => p.loops)
   const runN = all.filter((l) => l.state === "running" || l.state === "converging").length
   const needN = all.filter((l) => ATTENTION.has(l.state)).length
   return (
