@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { C, SERIF, MONO } from '../constants'
+import { C, SERIF, MONO, btnPrimary } from '../constants'
 import { projStats, sortedLoops, ATTENTION, LOOP_STATE, PRI } from '../data'
+import CreateLoopModal from './CreateLoopModal'
 
-export default function Hub({ proj, onOpen }) {
+export default function Hub({ proj, onOpen, onCreateLoop }) {
   const st = projStats(proj)
   const loops = sortedLoops(proj)
   const attn = loops.filter((l) => ATTENTION.has(l.state))
   const conv = loops.filter((l) => l.state === "converging")
   const run = loops.filter((l) => l.state === "running")
   const done = loops.filter((l) => l.state === "done")
+  const [creating, setCreating] = useState(false)
 
   return (
     <div className="fade">
@@ -30,9 +32,14 @@ export default function Hub({ proj, onOpen }) {
       {/* 项目概览卡 */}
       <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16,
         padding: "22px 24px", marginBottom: 30 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 21, fontWeight: 500, color: C.ink }}>{proj.name}</h2>
-          <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{proj.id}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <h2 style={{ margin: 0, fontFamily: SERIF, fontSize: 21, fontWeight: 500, color: C.ink }}>{proj.name}</h2>
+            <span style={{ fontFamily: MONO, fontSize: 11.5, color: C.dim }}>{proj.id}</span>
+          </div>
+          <button onClick={() => setCreating(true)} style={{ ...btnPrimary, width: "auto", padding: "8px 14px", fontSize: 12.5 }}>
+            + 新建 loop
+          </button>
         </div>
         <p style={{ margin: "0 0 18px", color: C.body, fontSize: 14, lineHeight: 1.6 }}>{proj.blurb}</p>
         <StatusStrip loops={loops} />
@@ -73,6 +80,13 @@ export default function Hub({ proj, onOpen }) {
 
       {/* 4. 已收敛（折叠）*/}
       {done.length > 0 && <DoneFold loops={done} />}
+
+      {creating && (
+        <CreateLoopModal
+          onSubmit={(form) => { onCreateLoop(form); setCreating(false) }}
+          onClose={() => setCreating(false)}
+        />
+      )}
     </div>
   )
 }
