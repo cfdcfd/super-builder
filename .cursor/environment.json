@@ -1,0 +1,17 @@
+{
+  "name": "super-builder",
+  "install": "python3 --version && test -f converge-cowork-demo.html && echo 'super-builder ready: static demo, no build step'",
+  "terminals": [
+    {
+      "name": "demo-server",
+      "command": "python3 -m http.server 8080",
+      "description": "Serves the Converge demo at http://localhost:8080/converge-cowork-demo.html"
+    }
+  ],
+  "ports": [
+    {
+      "name": "demo",
+      "port": 8080
+    }
+  ]
+}
