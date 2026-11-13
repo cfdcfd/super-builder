@@ -1,0 +1,5 @@
+改写自 https://github.com/tomzx/agents/tree/main/skills/sessions-memory
+上游提交：31f0fc756d0bbeddde013a51985880c24139f7a8（2026-11-11）
+上游许可：MIT，Copyright (c) 2025 Tom Rochette，见 LICENSE。
+
+这一版不再读取 agentsview 的 SQLite 档案。它直接接受 JSONL、JSON、Markdown、纯文本和 ChatGPT 导出，并把给人看的说明和输出写成简体中文。
